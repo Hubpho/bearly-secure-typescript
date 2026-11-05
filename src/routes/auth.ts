@@ -8,7 +8,8 @@ import {
 } from "../auth/passwords.ts";
 import {
   createPasswordResetToken,
-  findPasswordResetToken,
+  resetPasswordWithToken,
+  validatePasswordResetToken,
 } from "../auth/passwordResetTokens.ts";
 import {
   clearSessionCookie,
@@ -42,7 +43,6 @@ import {
   findUserById,
   getTotpSecret,
   normalizeEmail,
-  updateUserPassword,
 } from "../auth/users.ts";
 import {
   renderLoginPage,
@@ -435,7 +435,7 @@ export function createAuthRouter(deps: Dependencies): Router {
 
   router.get("/password-reset/:token", (req, res) => {
     const token = String(req.params.token ?? "");
-    const resetToken = findPasswordResetToken(db, token);
+    const resetToken = validatePasswordResetToken(db, token);
 
     if (!resetToken) {
       res
@@ -453,7 +453,7 @@ export function createAuthRouter(deps: Dependencies): Router {
   router.post("/password-reset/:token", async (req, res) => {
     const token = String(req.params.token ?? "");
     const password = String(req.body.password ?? "");
-    const resetToken = findPasswordResetToken(db, token);
+    const resetToken = validatePasswordResetToken(db, token);
 
     if (!resetToken) {
       res
@@ -501,7 +501,11 @@ export function createAuthRouter(deps: Dependencies): Router {
     }
 
     const passwordHash = await hashPassword(password);
-    const passwordResetSucceeded = true;
+    const passwordResetSucceeded = resetPasswordWithToken(
+      db,
+      token,
+      passwordHash,
+    );
     if (!passwordResetSucceeded) {
       res
         .status(404)
@@ -511,8 +515,6 @@ export function createAuthRouter(deps: Dependencies): Router {
         );
       return;
     }
-
-    await updateUserPassword(db, user.id, passwordHash);
 
     res.type("html").send(renderPasswordResetCompletePage(user.email));
   });
